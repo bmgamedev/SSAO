@@ -64,26 +64,26 @@ void setup()
 
 	// Shader
 	lambert = std::make_shared<Shader>("Lambert");
-	lambert->add(GL_VERTEX_SHADER, "resources/shaders/lambert.vert");
-	lambert->add(GL_FRAGMENT_SHADER, "resources/shaders/lambert.frag");
+	lambert->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/lambert.vert");
+	lambert->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/lambert.frag");
 	lambert->build();
 
 	post_process = std::make_shared<Shader>("post_process");
-	post_process->add(GL_VERTEX_SHADER, "resources/shaders/post_process.vert");
-	post_process->add(GL_FRAGMENT_SHADER, "resources/shaders/post_process.frag");
+	post_process->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/post_process.vert");
+	post_process->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/post_process.frag");
 	post_process->build();
 
 	// Meshes
 	ground.load(Mesh::Quad);
-	ground.scale(glm::vec3(5.0F));
+	ground.scale = glm::vec3(5.0f);
 	ground.shader = lambert;
 
 	cube.load(Mesh::Cube);
-	cube.translate(glm::vec3(1.0F, 0.0F, 1.0F));
+	cube.position += glm::vec3(1.0F, 0.0F, 1.0F);
 	cube.shader = lambert;
 
 	sphere.load(Mesh::File, "resources/models/sphere.obj");
-	sphere.translate(glm::vec3(-1.0F, 0.0F, 1.0F));
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 	sphere.shader = lambert;
 
 	//create frame buffer
@@ -124,7 +124,8 @@ void render()
 	glEnable(GL_DEPTH_TEST);
 
 	// Use the shader
-	if (!lambert->use()) {
+	lambert->use();
+	if (!lambert->is_active()) {
 		std::cerr << "ERROR: Couldn't use " << lambert->name << " shader." << std::endl;
 		return;
 	}
@@ -134,19 +135,19 @@ void render()
 	lambert->bind("view", renderer::camera.view());
 
 	// Bind matrices and draw mesh
-	lambert->bind("translate", sphere.translate());
-	lambert->bind("rotate", sphere.rotate());
-	lambert->bind("scale", sphere.scale());
+	lambert->bind("translate", sphere.translate_matrix());
+	lambert->bind("rotate", sphere.rotate_matrix());
+	lambert->bind("scale", sphere.scale_matrix());
 	renderer::draw(sphere);
 
-	lambert->bind("translate", cube.translate());
-	lambert->bind("rotate", cube.rotate());
-	lambert->bind("scale", cube.scale());
+	lambert->bind("translate", cube.translate_matrix());
+	lambert->bind("rotate", cube.rotate_matrix());
+	lambert->bind("scale", cube.scale_matrix());
 	renderer::draw(cube);
 
-	lambert->bind("translate", ground.translate());
-	lambert->bind("rotate", ground.rotate());
-	lambert->bind("scale", ground.scale());
+	lambert->bind("translate", ground.translate_matrix());
+	lambert->bind("rotate", ground.rotate_matrix());
+	lambert->bind("scale", ground.scale_matrix());
 	renderer::draw(ground);
 
 	renderer::display();
