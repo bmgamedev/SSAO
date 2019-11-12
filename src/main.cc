@@ -16,8 +16,8 @@ void PostProcessSetUp();
 void PostProcessRender();
 void SSAOSetUp();
 void SSAORender();
-void FBOTestSetUp();
-void FBOTestRender();
+void TwoPassTestSetup();
+void TwoPassTestRender();
 void renderQuad();
 float lerp(float a, float b, float f);
 
@@ -29,6 +29,7 @@ std::shared_ptr<Shader> static SSAO_geom;
 std::shared_ptr<Shader> static SSAO;
 std::shared_ptr<Shader> static SSAO_lighting;
 std::shared_ptr<Shader> static SSAO_blur;
+std::shared_ptr<Shader> static blur;
 
 // Meshes
 auto static ground = Mesh();
@@ -39,6 +40,11 @@ auto static sphere = Mesh();
 unsigned int framebuffer;
 unsigned int texColourBuffer;
 unsigned int renderbufferobject;
+
+//framebuffers
+unsigned int framebuffer2;
+unsigned int texColourBuffer2;
+unsigned int renderbufferobject2;
 
 //framebuffers - SSAO
 unsigned int gBuffer;
@@ -70,16 +76,16 @@ void setup() {
 	renderer::camera.look_at(glm::vec3(0.0f));
 	renderer::camera.sensitivity = 0.001f;
 
-	PostProcessSetUp();
+	//PostProcessSetUp();
 	//SSAOSetUp();
-	//FBOTestSetUp();
+	TwoPassTestSetup();
 	
 }
 
 void render() {
-	PostProcessRender();
+	//PostProcessRender();
 	//SSAORender();
-	//FBOTestRender();
+	TwoPassTestRender();
 
 }
 
@@ -90,28 +96,26 @@ auto main()-> int {
 }
 
 void PostProcessSetUp() {
+	// Shaders
 	lambert = std::make_shared<Shader>("Lambert");
-	lambert->add(GL_VERTEX_SHADER, "resources/shaders/lambert.vert");
-	lambert->add(GL_FRAGMENT_SHADER, "resources/shaders/lambert.frag");
+	lambert->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/lambert.vert");
+	lambert->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/lambert.frag");
 	lambert->build();
 
 	post_process = std::make_shared<Shader>("post_process");
-	post_process->add(GL_VERTEX_SHADER, "resources/shaders/post_process.vert");
-	post_process->add(GL_FRAGMENT_SHADER, "resources/shaders/post_process.frag");
+	post_process->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/post_process.vert");
+	post_process->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/post_process.frag");
 	post_process->build();
 
 	// Meshes
 	ground.load(Mesh::Quad);
-	ground.scale(glm::vec3(5.0F));
-	ground.shader = lambert;
+	ground.scale = glm::vec3(5.0f);
 
 	cube.load(Mesh::Cube);
-	cube.translate(glm::vec3(1.0F, 0.0F, 1.0F));
-	cube.shader = lambert;
+	cube.position += glm::vec3(1.0F, 0.0F, 1.0F);
 
 	sphere.load(Mesh::File, "resources/models/sphere.obj");
-	sphere.translate(glm::vec3(-1.0F, 0.0F, 1.0F));
-	sphere.shader = lambert;
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 
 	//create frame buffer
 	glGenFramebuffers(1, &framebuffer);
@@ -150,7 +154,8 @@ void PostProcessRender() {
 	glEnable(GL_DEPTH_TEST);
 
 	// Use the shader
-	if (!lambert->use()) {
+	lambert->use();
+	if (!lambert->is_active()) {
 		std::cerr << "ERROR: Couldn't use " << lambert->name << " shader." << std::endl;
 		return;
 	}
@@ -160,19 +165,19 @@ void PostProcessRender() {
 	lambert->bind("view", renderer::camera.view());
 
 	// Bind matrices and draw mesh
-	lambert->bind("translate", sphere.translate());
-	lambert->bind("rotate", sphere.rotate());
-	lambert->bind("scale", sphere.scale());
+	lambert->bind("translate", sphere.translate_matrix());
+	lambert->bind("rotate", sphere.rotate_matrix());
+	lambert->bind("scale", sphere.scale_matrix());
 	renderer::draw(sphere);
 
-	lambert->bind("translate", cube.translate());
-	lambert->bind("rotate", cube.rotate());
-	lambert->bind("scale", cube.scale());
+	lambert->bind("translate", cube.translate_matrix());
+	lambert->bind("rotate", cube.rotate_matrix());
+	lambert->bind("scale", cube.scale_matrix());
 	renderer::draw(cube);
 
-	lambert->bind("translate", ground.translate());
-	lambert->bind("rotate", ground.rotate());
-	lambert->bind("scale", ground.scale());
+	lambert->bind("translate", ground.translate_matrix());
+	lambert->bind("rotate", ground.rotate_matrix());
+	lambert->bind("scale", ground.scale_matrix());
 	renderer::draw(ground);
 
 	renderer::display();
@@ -189,7 +194,182 @@ void PostProcessRender() {
 	glDrawArrays(GL_TRIANGLES, 0, 6); //tested - needed
 }
 
+void TwoPassTestSetup() {
+	//TODO : Not complete
+
+	// Shaders
+	lambert = std::make_shared<Shader>("Lambert");
+	lambert->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/lambert.vert");
+	lambert->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/lambert.frag");
+	lambert->build();
+
+	post_process = std::make_shared<Shader>("post_process");
+	post_process->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/post_process.vert");
+	post_process->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/post_process.frag");
+	post_process->build();
+
+	blur = std::make_shared<Shader>("blur");
+	blur->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/post_process.vert");
+	blur->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/blur.frag");
+	blur->build();
+
+	// Meshes
+	ground.load(Mesh::Quad);
+	ground.scale = glm::vec3(5.0f);
+
+	cube.load(Mesh::Cube);
+	cube.position += glm::vec3(1.0F, 0.0F, 1.0F);
+
+	sphere.load(Mesh::File, "resources/models/sphere.obj");
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
+
+	//create frame buffer
+	glGenFramebuffers(1, &framebuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); //bind as active framebuffer
+
+	glGenTextures(1, &texColourBuffer);
+	glBindTexture(GL_TEXTURE_2D, texColourBuffer);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL); //texture's data paramter = null because only allocating memory rn, not filling it
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColourBuffer, 0);
+	//Args: target (framebuffer TYPE), attachment (TYPE and # - in case multiple), TYPE of text wanting to attach, the ACTUAL tex we're attaching, mipmap level 
+
+	glGenRenderbuffers(1, &renderbufferobject);
+	glBindRenderbuffer(GL_RENDERBUFFER, renderbufferobject);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferobject);
+
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer
+
+
+	//create frame buffer 2
+	glGenFramebuffers(1, &framebuffer2);
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2); //bind as active framebuffer
+
+	glGenTextures(1, &texColourBuffer2);
+	glBindTexture(GL_TEXTURE_2D, texColourBuffer2);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL); //texture's data paramter = null because only allocating memory rn, not filling it
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColourBuffer2, 0);
+
+	glGenRenderbuffers(1, &renderbufferobject2);
+	glBindRenderbuffer(GL_RENDERBUFFER, renderbufferobject2);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferobject2);
+
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer
+
+	blur->use();
+	blur->bind("screenTexture", 0);
+
+	renderQuad();
+}
+
+void TwoPassTestRender() {
+
+	//Initial pass - create scene data
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
+
+	// Use the shader
+	lambert->use();
+
+	// Bind camera matrices
+	lambert->bind("projection", renderer::camera.projection());
+	lambert->bind("view", renderer::camera.view());
+
+	// Bind matrices and draw mesh
+	lambert->bind("translate", sphere.translate_matrix());
+	lambert->bind("rotate", sphere.rotate_matrix());
+	lambert->bind("scale", sphere.scale_matrix());
+	renderer::draw(sphere);
+
+	lambert->bind("translate", cube.translate_matrix());
+	lambert->bind("rotate", cube.rotate_matrix());
+	lambert->bind("scale", cube.scale_matrix());
+	renderer::draw(cube);
+
+	lambert->bind("translate", ground.translate_matrix());
+	lambert->bind("rotate", ground.rotate_matrix());
+	lambert->bind("scale", ground.scale_matrix());
+	renderer::draw(ground);
+
+	renderer::display();
+
+	// first pass - Invert colours
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2);
+	//glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	post_process->use();
+	glBindVertexArray(quadVAO);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texColourBuffer);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+	// second pass - Blur
+	glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default i.e. screen
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	blur->use();
+	glBindVertexArray(quadVAO);
+	glDisable(GL_DEPTH_TEST);
+	glBindTexture(GL_TEXTURE_2D, texColourBuffer2);
+	glDrawArrays(GL_TRIANGLES, 0, 6); 
+}
+
 void SSAOSetUp() {
+	// Shaders
+	SSAO_geom = std::make_shared<Shader>("SSAO_geom");
+	SSAO_geom->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/SSAO_geometry.vert");
+	SSAO_geom->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/SSAO_geometry.frag");
+	SSAO_geom->build();
+
+	SSAO_lighting = std::make_shared<Shader>("SSAO_lighting");
+	SSAO_lighting->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/SSAO.vert");
+	SSAO_lighting->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/SSAO_lighting.frag");
+	SSAO_lighting->build();
+
+	SSAO = std::make_shared<Shader>("SSAO");
+	SSAO->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/SSAO.vert");
+	SSAO->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/SSAO.frag");
+	SSAO->build();
+
+	SSAO_blur = std::make_shared<Shader>("SSAO_blur");
+	SSAO_blur->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/SSAO.vert");
+	SSAO_blur->add(GL_FRAGMENT_SHADER, Shader::File, "resources/shaders/SSAO_blur.frag");
+	SSAO_blur->build();
+
+	// Meshes
+	ground.load(Mesh::Quad);
+	ground.scale = glm::vec3(5.0f);
+
+	cube.load(Mesh::Cube);
+	cube.position += glm::vec3(1.0F, 0.0F, 1.0F);
+
+	sphere.load(Mesh::File, "resources/models/sphere.obj");
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
+
+
 	glEnable(GL_DEPTH_TEST);
 
 	// g-buffer framebuffer
@@ -335,15 +515,15 @@ void SSAORender() {
 
 	// Bind matrices and draw mesh
 	sphere.shader = SSAO_geom;
-	SSAO_geom->bind("model", sphere.translate() * sphere.rotate() * sphere.scale());
+	SSAO_geom->bind("model", sphere.translate_matrix() * sphere.rotate_matrix() * sphere.scale_matrix());
 	renderer::draw(sphere);
 
 	cube.shader = SSAO_geom;
-	SSAO_geom->bind("model", cube.translate() * cube.rotate() * cube.scale());
+	SSAO_geom->bind("model", cube.translate_matrix() * cube.rotate_matrix() * cube.scale_matrix());
 	renderer::draw(cube);
 
 	ground.shader = SSAO_geom;
-	SSAO_geom->bind("model", ground.translate() * ground.rotate() * ground.scale());
+	SSAO_geom->bind("model", ground.translate_matrix() * ground.rotate_matrix() * ground.scale_matrix());
 	renderer::draw(ground);
 
 	renderer::display();
@@ -365,7 +545,7 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, gNormal);
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, noiseTexture);
-	renderQuad();
+	//renderQuad();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
@@ -377,7 +557,7 @@ void SSAORender() {
 	SSAO_blur->use();
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
-	renderQuad();
+	//renderQuad();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -407,121 +587,13 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, gAlbedo);
 	glActiveTexture(GL_TEXTURE3); // add extra SSAO texture to lighting pass
 	glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
-	renderQuad();
+	//renderQuad();
 
 
 	//glDisable(GL_DEPTH_TEST);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	//renderer::display();
-}
-
-void FBOTestSetUp() {
-	//TODO : Not complete
-
-	// Shader
-	lambert = std::make_shared<Shader>("Lambert");
-	lambert->add(GL_VERTEX_SHADER, "resources/shaders/lambert.vert");
-	lambert->add(GL_FRAGMENT_SHADER, "resources/shaders/lambert.frag");
-	lambert->build();
-
-	post_process = std::make_shared<Shader>("post_process");
-	post_process->add(GL_VERTEX_SHADER, "resources/shaders/post_process.vert");
-	post_process->add(GL_FRAGMENT_SHADER, "resources/shaders/post_process.frag");
-	post_process->build();
-
-	fbo_test = std::make_shared<Shader>("fbo_test");
-	fbo_test->add(GL_VERTEX_SHADER, "resources/shaders/framebuffer_test.vert");
-	fbo_test->add(GL_FRAGMENT_SHADER, "resources/shaders/framebuffer_test.frag");
-	fbo_test->build();
-
-	SSAO_geom = std::make_shared<Shader>("SSAO_geom");
-	SSAO_geom->add(GL_VERTEX_SHADER, "resources/shaders/SSAO_geometry.vert");
-	SSAO_geom->add(GL_FRAGMENT_SHADER, "resources/shaders/SSAO_geometry.frag");
-	SSAO_geom->build();
-
-	SSAO = std::make_shared<Shader>("SSAO");
-	SSAO->add(GL_VERTEX_SHADER, "resources/shaders/SSAO.vert");
-	SSAO->add(GL_FRAGMENT_SHADER, "resources/shaders/SSAO.frag");
-	SSAO->build();
-
-	SSAO_lighting = std::make_shared<Shader>("SSAO_lighting");
-	SSAO_lighting->add(GL_VERTEX_SHADER, "resources/shaders/SSAO.vert");
-	SSAO_lighting->add(GL_FRAGMENT_SHADER, "resources/shaders/SSAO_lighting.frag");
-	SSAO_lighting->build();
-
-	SSAO_blur = std::make_shared<Shader>("SSAO_blur");
-	SSAO_blur->add(GL_VERTEX_SHADER, "resources/shaders/SSAO.vert");
-	SSAO_blur->add(GL_FRAGMENT_SHADER, "resources/shaders/SSAO_blur.frag");
-	SSAO_blur->build();
-
-	// Meshes
-	ground.load(Mesh::Quad);
-	ground.scale(glm::vec3(5.0f));
-	ground.shader = SSAO_geom;
-
-	cube.load(Mesh::Cube);
-	cube.translate(glm::vec3(1.0f, 0.0f, 1.0f));
-	cube.shader = SSAO_geom;
-
-	sphere.load(Mesh::File, "resources/models/sphere.obj");
-	sphere.translate(glm::vec3(-1.0f, 0.0f, 1.0f));
-	sphere.shader = SSAO_geom;
-
-	renderQuad();
-}
-
-void FBOTestRender() {
-	//TODO : Not complete
-
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glm::mat4 projection = renderer::camera.projection();
-	glm::mat4 view = renderer::camera.view();
-
-	/// 1. geometry pass: render scene's geometry/color data into gbuffer
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	SSAO_geom->use();
-	SSAO_geom->bind("projection", projection);
-	SSAO_geom->bind("view", view);
-
-	SSAO_geom->bind("invertedNormals", 0); //uniform exists for a room cube
-
-	// Bind matrices and draw mesh
-	sphere.shader = SSAO_geom;
-	SSAO_geom->bind("model", sphere.translate() * sphere.rotate() * sphere.scale());
-	renderer::draw(sphere);
-
-	cube.shader = SSAO_geom;
-	SSAO_geom->bind("model", cube.translate() * cube.rotate() * cube.scale());
-	renderer::draw(cube);
-
-	ground.shader = SSAO_geom;
-	SSAO_geom->bind("model", ground.translate() * ground.rotate() * ground.scale());
-	renderer::draw(ground);
-
-	renderer::display();
-
-	//second pass
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	fbo_test->use();
-	glBindVertexArray(quadVAO);
-	glDisable(GL_DEPTH_TEST);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gPosition);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, gNormal);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, gAlbedo);
-
-	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 void renderQuad()
