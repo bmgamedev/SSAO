@@ -40,8 +40,8 @@ unsigned int renderbufferobject;
 unsigned int framebuffer2;
 unsigned int texColourBuffer2;
 unsigned int renderbufferobject2;
-std::shared_ptr<Framebuffer> static fbo;
-std::shared_ptr<Framebuffer> static fbo2;
+std::shared_ptr<Framebuffer> static invertion_frame;
+std::shared_ptr<Framebuffer> static blur_frame;
 
 //framebuffers - SSAO
 unsigned int gBuffer;
@@ -222,14 +222,19 @@ void TwoPassTestSetup() {
 	quad.load(Mesh::Quad);
 
 	//New FBO code:
-	fbo = std::make_shared<Framebuffer>(renderer::width, renderer::height);
-	fbo2 = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+	invertion_frame = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+	invertion_frame->add_frame(0, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE); //colour attachment, num 0
+	invertion_frame->add_depth(); //depth attachment
+
+	blur_frame = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+	blur_frame->add_frame(0, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE); //colour attachment, num 0
+	blur_frame->add_depth(); //depth attachment
 }
 
 void TwoPassTestRender() {
 
 	//New FBO code:
-	renderer::target(fbo.get());
+	renderer::target(invertion_frame.get());
 	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	renderer::clear();
 
@@ -260,12 +265,18 @@ void TwoPassTestRender() {
 
 	// New FBO code:
 	// first pass - Invert colours
-	renderer::target(fbo2.get());
+	renderer::target(blur_frame.get());
 	renderer::clear(); 
 
 	post_process->use();
 	post_process->bind("screenTexture", 0);
-	renderer::bind(fbo->frame(), 0);
+	auto attachment = invertion_frame->frame(0);
+	if (attachment.has_value())
+	{
+		auto const tex = attachment.value();
+		renderer::bind(*tex, 0);
+	}
+	// renderer::bind(*invertion_frame->frame(0).value_or(0), 0); // SEE ABOVE, not such a nice interface I know :p
 
 	renderer::draw(quad);
 
@@ -275,7 +286,13 @@ void TwoPassTestRender() {
 
 	blur->use();
 	blur->bind("screenTexture", 0);
-	renderer::bind(fbo2->frame(), 0);
+	attachment = blur_frame->frame(0);
+	if (attachment.has_value())
+	{
+		auto const tex = attachment.value();
+		renderer::bind(*tex, 0);
+	}
+	// renderer::bind(*invertion_frame->frame(0).value_or(0), 0); // SEE ABOVE, not such a nice interface I know :p
 
 	renderer::draw(quad);
 }
