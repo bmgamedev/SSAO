@@ -230,8 +230,7 @@ void TwoPassTestSetup() {
 
 void TwoPassTestRender() {
 
-	//renderer::target(*fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo->buffer());
+	renderer::target(fbo.get());
 	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	renderer::clear();
 	glEnable(GL_DEPTH_TEST);
@@ -262,8 +261,7 @@ void TwoPassTestRender() {
 	renderer::display();
 
 	/// first pass - Invert colours
-	//renderer::target(fbo2.get());
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo2->buffer());
+	renderer::target(fbo2.get());
 	renderer::clear(); 
 
 	post_process->use();
