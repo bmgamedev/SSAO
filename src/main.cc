@@ -292,8 +292,8 @@ void TwoPassTestSetup() {
 void TwoPassTestRender() {
 
 	//New FBO code:
-	//renderer::target(*fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo->buffer());
+	renderer::target(fbo.get());
+	//glBindFramebuffer(GL_FRAMEBUFFER, fbo->buffer());
 	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	renderer::clear();
 	glEnable(GL_DEPTH_TEST);
