@@ -41,10 +41,12 @@ unsigned int framebuffer;
 unsigned int texColourBuffer;
 unsigned int renderbufferobject;
 
-//framebuffers
+//framebuffers - two pass
 unsigned int framebuffer2;
 unsigned int texColourBuffer2;
 unsigned int renderbufferobject2;
+std::shared_ptr<Framebuffer> static fbo;
+std::shared_ptr<Framebuffer> static fbo2;
 
 //framebuffers - SSAO
 unsigned int gBuffer;
@@ -223,6 +225,11 @@ void TwoPassTestSetup() {
 	sphere.load(Mesh::File, "resources/models/sphere.obj");
 	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 
+	//New FBO code:
+	fbo = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+	fbo2 = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+	/*/ 
+	//Old FBO code:
 	//create frame buffer
 	glGenFramebuffers(1, &framebuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); //bind as active framebuffer
@@ -274,6 +281,7 @@ void TwoPassTestSetup() {
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer
+	//*/
 
 	blur->use();
 	blur->bind("screenTexture", 0);
@@ -283,11 +291,20 @@ void TwoPassTestSetup() {
 
 void TwoPassTestRender() {
 
+	//New FBO code:
+	//renderer::target(*fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo->buffer());
+	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
+	renderer::clear();
+	glEnable(GL_DEPTH_TEST);
+	/*/
+	//Old FBO code:
 	//Initial pass - create scene data
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
+	//*/
 
 	// Use the shader
 	lambert->use();
@@ -314,6 +331,28 @@ void TwoPassTestRender() {
 
 	renderer::display();
 
+	// New FBO code:
+	// first pass - Invert colours
+	//renderer::target(fbo2.get());
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo2->buffer());
+	renderer::clear(); 
+
+	post_process->use();
+	glBindVertexArray(quadVAO);
+	glActiveTexture(GL_TEXTURE0);
+	renderer::bind(fbo->frame(), 0);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+	// second pass - Blur
+	renderer::target();
+	renderer::clear(); //But in some instances, might not want to clear depth buffer??
+
+	blur->use();
+	glBindVertexArray(quadVAO);
+	renderer::bind(fbo2->frame(), 0);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	/*/
+	//Old FBO code:
 	// first pass - Invert colours
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2);
 	//glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -334,7 +373,10 @@ void TwoPassTestRender() {
 	glBindVertexArray(quadVAO);
 	glDisable(GL_DEPTH_TEST);
 	glBindTexture(GL_TEXTURE_2D, texColourBuffer2);
-	glDrawArrays(GL_TRIANGLES, 0, 6); 
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	//*/
+
+	
 }
 
 void SSAOSetUp() {
