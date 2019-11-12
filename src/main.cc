@@ -1,12 +1,6 @@
 #include <iostream>
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
-#include <glm/ext.hpp>
-#include <e3d/ogl/app.hh>
-
 #include <random>
-#define GLM_ENABLE_EXPERIMENTAL
+#include <e3d/ogl/app.hh>
 #define M_PI 3.1415926535897932384626433832795
 
 using namespace ogl;
@@ -32,6 +26,7 @@ std::shared_ptr<Shader> static SSAO_blur;
 std::shared_ptr<Shader> static blur;
 
 // Meshes
+auto static quad = Mesh();
 auto static ground = Mesh();
 auto static cube = Mesh();
 auto static sphere = Mesh();
@@ -81,7 +76,6 @@ void setup() {
 	//PostProcessSetUp();
 	//SSAOSetUp();
 	TwoPassTestSetup();
-	
 }
 
 void render() {
@@ -225,68 +219,17 @@ void TwoPassTestSetup() {
 	sphere.load(Mesh::File, "resources/models/sphere.obj");
 	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 
+	quad.load(Mesh::Quad);
+
 	//New FBO code:
 	fbo = std::make_shared<Framebuffer>(renderer::width, renderer::height);
 	fbo2 = std::make_shared<Framebuffer>(renderer::width, renderer::height);
-	/*/ 
-	//Old FBO code:
-	//create frame buffer
-	glGenFramebuffers(1, &framebuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); //bind as active framebuffer
+	
 
-	glGenTextures(1, &texColourBuffer);
-	glBindTexture(GL_TEXTURE_2D, texColourBuffer);
+//	blur->use();
+//	blur->bind("screenTexture", 0);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL); //texture's data paramter = null because only allocating memory rn, not filling it
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColourBuffer, 0);
-	//Args: target (framebuffer TYPE), attachment (TYPE and # - in case multiple), TYPE of text wanting to attach, the ACTUAL tex we're attaching, mipmap level 
-
-	glGenRenderbuffers(1, &renderbufferobject);
-	glBindRenderbuffer(GL_RENDERBUFFER, renderbufferobject);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferobject);
-
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer
-
-
-	//create frame buffer 2
-	glGenFramebuffers(1, &framebuffer2);
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2); //bind as active framebuffer
-
-	glGenTextures(1, &texColourBuffer2);
-	glBindTexture(GL_TEXTURE_2D, texColourBuffer2);
-
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL); //texture's data paramter = null because only allocating memory rn, not filling it
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColourBuffer2, 0);
-
-	glGenRenderbuffers(1, &renderbufferobject2);
-	glBindRenderbuffer(GL_RENDERBUFFER, renderbufferobject2);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferobject2);
-
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer
-	//*/
-
-	blur->use();
-	blur->bind("screenTexture", 0);
-
-	renderQuad();
+//	renderQuad();
 }
 
 void TwoPassTestRender() {
@@ -297,14 +240,6 @@ void TwoPassTestRender() {
 	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	renderer::clear();
 	glEnable(GL_DEPTH_TEST);
-	/*/
-	//Old FBO code:
-	//Initial pass - create scene data
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_DEPTH_TEST);
-	//*/
 
 	// Use the shader
 	lambert->use();
@@ -333,50 +268,26 @@ void TwoPassTestRender() {
 
 	// New FBO code:
 	// first pass - Invert colours
-	//renderer::target(fbo2.get());
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo2->buffer());
+	renderer::target(fbo2.get());
 	renderer::clear(); 
 
 	post_process->use();
-	glBindVertexArray(quadVAO);
-	glActiveTexture(GL_TEXTURE0);
+	post_process->bind("screenTexture", 0);
 	renderer::bind(fbo->frame(), 0);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+//	renderQuad();
+	renderer::draw(quad);
 
 	// second pass - Blur
 	renderer::target();
 	renderer::clear(); //But in some instances, might not want to clear depth buffer??
 
 	blur->use();
-	glBindVertexArray(quadVAO);
+	blur->bind("screenTexture", 0);
 	renderer::bind(fbo2->frame(), 0);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-	/*/
-	//Old FBO code:
-	// first pass - Invert colours
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2);
-	//glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	post_process->use();
-	glBindVertexArray(quadVAO);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texColourBuffer);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-
-	// second pass - Blur
-	glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default i.e. screen
-	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	blur->use();
-	glBindVertexArray(quadVAO);
-	glDisable(GL_DEPTH_TEST);
-	glBindTexture(GL_TEXTURE_2D, texColourBuffer2);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-	//*/
-
-	
+	//renderQuad();
+	renderer::draw(quad);
 }
 
 void SSAOSetUp() {
