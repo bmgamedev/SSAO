@@ -21,6 +21,8 @@ unsigned int framebuffer;
 unsigned int texColourBuffer;
 unsigned int renderbufferobject;
 
+auto static framebuffer2;
+
 //screen quad
 unsigned int quadVAO = 0;
 unsigned int quadVBO;
@@ -85,6 +87,11 @@ void setup()
 	sphere.load(Mesh::File, "resources/models/sphere.obj");
 	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 	sphere.shader = lambert;
+
+
+	///**** FramBuf tests
+	//framebuffer2 = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+	/// Not finished
 
 	//create frame buffer
 	glGenFramebuffers(1, &framebuffer);
