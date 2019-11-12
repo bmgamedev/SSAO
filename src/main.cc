@@ -224,22 +224,14 @@ void TwoPassTestSetup() {
 	//New FBO code:
 	fbo = std::make_shared<Framebuffer>(renderer::width, renderer::height);
 	fbo2 = std::make_shared<Framebuffer>(renderer::width, renderer::height);
-	
-
-//	blur->use();
-//	blur->bind("screenTexture", 0);
-
-//	renderQuad();
 }
 
 void TwoPassTestRender() {
 
 	//New FBO code:
 	renderer::target(fbo.get());
-	//glBindFramebuffer(GL_FRAMEBUFFER, fbo->buffer());
 	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	renderer::clear();
-	glEnable(GL_DEPTH_TEST);
 
 	// Use the shader
 	lambert->use();
@@ -275,7 +267,6 @@ void TwoPassTestRender() {
 	post_process->bind("screenTexture", 0);
 	renderer::bind(fbo->frame(), 0);
 
-//	renderQuad();
 	renderer::draw(quad);
 
 	// second pass - Blur
@@ -286,7 +277,6 @@ void TwoPassTestRender() {
 	blur->bind("screenTexture", 0);
 	renderer::bind(fbo2->frame(), 0);
 
-	//renderQuad();
 	renderer::draw(quad);
 }
 
