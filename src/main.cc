@@ -12,13 +12,11 @@ void SSAOSetUp();
 void SSAORender();
 void TwoPassTestSetup();
 void TwoPassTestRender();
-//void renderQuad();
 float lerp(float a, float b, float f);
 
 // Shaders
 std::shared_ptr<Shader> static lambert;
 std::shared_ptr<Shader> static post_process;
-//std::shared_ptr<Shader> static fbo_test;
 std::shared_ptr<Shader> static blur;
 
 std::shared_ptr<Shader> static SSAO_geom;
@@ -34,9 +32,10 @@ auto static cube = Mesh();
 auto static sphere = Mesh();
 
 //framebuffers - Post process
-unsigned int framebuffer;
-unsigned int texColourBuffer;
-unsigned int renderbufferobject;
+std::shared_ptr<Framebuffer> static fboPostProcess;
+//unsigned int framebuffer;
+//unsigned int texColourBuffer;
+//unsigned int renderbufferobject;
 
 //framebuffers - two pass
 std::shared_ptr<Framebuffer> static fbo;
@@ -63,15 +62,15 @@ void setup() {
 	renderer::camera.look_at(glm::vec3(0.0f));
 	renderer::camera.sensitivity = 0.001f;
 
-	//PostProcessSetUp();
+	PostProcessSetUp();
 	//TwoPassTestSetup();
-	SSAOSetUp();
+	//SSAOSetUp();
 }
 
 void render() {
-	//PostProcessRender();
+	PostProcessRender();
 	//TwoPassTestRender();
-	SSAORender();
+	//SSAORender();
 }
 
 auto main()-> int {
@@ -105,7 +104,9 @@ void PostProcessSetUp() {
 	quad.load(Mesh::Quad);
 
 	//create frame buffer
-	glGenFramebuffers(1, &framebuffer);
+	fboPostProcess = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+
+	/*glGenFramebuffers(1, &framebuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); //bind as active framebuffer
 
 	glGenTextures(1, &texColourBuffer);
@@ -127,14 +128,19 @@ void PostProcessSetUp() {
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferobject);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer (so we can see stuff on screen)
-
+	*/
 }
 
 void PostProcessRender() {
+	
+	renderer::target(fboPostProcess.get());
+	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
+	renderer::clear();
+	/*
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
-	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_DEPTH_TEST); */
 
 	// Use the shader
 	lambert->use();
@@ -166,8 +172,12 @@ void PostProcessRender() {
 	renderer::clear(); //But in some instances, might not want to clear depth buffer??
 
 	post_process->use();
+	post_process->bind("screenTexture", 0);
+	renderer::bind(fboPostProcess->frame(), 0);
+	/*
+	post_process->use();
 	glDisable(GL_DEPTH_TEST);
-	glBindTexture(GL_TEXTURE_2D, texColourBuffer);
+	glBindTexture(GL_TEXTURE_2D, texColourBuffer);*/
 
 	renderer::draw(quad);
 
@@ -252,7 +262,7 @@ void TwoPassTestRender() {
 
 	// second pass - Blur
 	renderer::target();
-	renderer::clear(); //But in some instances, might not want to clear depth buffer??
+	renderer::clear();
 
 	blur->use();
 	blur->bind("screenTexture", 0);
