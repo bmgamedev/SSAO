@@ -33,9 +33,6 @@ auto static sphere = Mesh();
 
 //framebuffers - Post process
 std::shared_ptr<Framebuffer> static fboPostProcess;
-//unsigned int framebuffer;
-//unsigned int texColourBuffer;
-//unsigned int renderbufferobject;
 
 //framebuffers - two pass
 std::shared_ptr<Framebuffer> static fbo;
@@ -62,15 +59,15 @@ void setup() {
 	renderer::camera.look_at(glm::vec3(0.0f));
 	renderer::camera.sensitivity = 0.001f;
 
-	PostProcessSetUp();
+	//PostProcessSetUp();
 	//TwoPassTestSetup();
-	//SSAOSetUp();
+	SSAOSetUp();
 }
 
 void render() {
-	PostProcessRender();
+	//PostProcessRender();
 	//TwoPassTestRender();
-	//SSAORender();
+	SSAORender();
 }
 
 auto main()-> int {
@@ -105,30 +102,6 @@ void PostProcessSetUp() {
 
 	//create frame buffer
 	fboPostProcess = std::make_shared<Framebuffer>(renderer::width, renderer::height);
-
-	/*glGenFramebuffers(1, &framebuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); //bind as active framebuffer
-
-	glGenTextures(1, &texColourBuffer);
-	glBindTexture(GL_TEXTURE_2D, texColourBuffer);
-
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL); //texture's data paramter = null because only allocating memory rn, not filling it
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColourBuffer, 0);
-	//Args: target (framebuffer TYPE), attachment (TYPE and # - in case multiple), TYPE of text wanting to attach, the ACTUAL tex we're attaching, mipmap level 
-
-	glGenRenderbuffers(1, &renderbufferobject);
-	glBindRenderbuffer(GL_RENDERBUFFER, renderbufferobject);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferobject);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer (so we can see stuff on screen)
-	*/
 }
 
 void PostProcessRender() {
@@ -136,11 +109,6 @@ void PostProcessRender() {
 	renderer::target(fboPostProcess.get());
 	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	renderer::clear();
-	/*
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
-	glEnable(GL_DEPTH_TEST); */
 
 	// Use the shader
 	lambert->use();
@@ -167,20 +135,15 @@ void PostProcessRender() {
 
 	renderer::display();
 
-	// second pass
+	//post process - invert colours
 	renderer::target();
 	renderer::clear(); //But in some instances, might not want to clear depth buffer??
 
 	post_process->use();
 	post_process->bind("screenTexture", 0);
 	renderer::bind(fboPostProcess->frame(), 0);
-	/*
-	post_process->use();
-	glDisable(GL_DEPTH_TEST);
-	glBindTexture(GL_TEXTURE_2D, texColourBuffer);*/
 
 	renderer::draw(quad);
-
 }
 
 void TwoPassTestSetup() {
