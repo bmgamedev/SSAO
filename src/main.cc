@@ -12,18 +12,20 @@ void SSAOSetUp();
 void SSAORender();
 void TwoPassTestSetup();
 void TwoPassTestRender();
-void renderQuad();
+//void renderQuad();
 float lerp(float a, float b, float f);
 
 // Shaders
 std::shared_ptr<Shader> static lambert;
 std::shared_ptr<Shader> static post_process;
-std::shared_ptr<Shader> static fbo_test;
+//std::shared_ptr<Shader> static fbo_test;
+std::shared_ptr<Shader> static blur;
+
 std::shared_ptr<Shader> static SSAO_geom;
 std::shared_ptr<Shader> static SSAO;
 std::shared_ptr<Shader> static SSAO_lighting;
 std::shared_ptr<Shader> static SSAO_blur;
-std::shared_ptr<Shader> static blur;
+
 
 // Meshes
 auto static quad = Mesh();
@@ -37,30 +39,29 @@ unsigned int texColourBuffer;
 unsigned int renderbufferobject;
 
 //framebuffers - two pass
-unsigned int framebuffer2;
-unsigned int texColourBuffer2;
-unsigned int renderbufferobject2;
+//unsigned int framebuffer2;
+//unsigned int texColourBuffer2;
+//unsigned int renderbufferobject2;
 std::shared_ptr<Framebuffer> static fbo;
 std::shared_ptr<Framebuffer> static fbo2;
 
 //framebuffers - SSAO
-unsigned int gBuffer;
-unsigned int gPosition, gNormal, gAlbedo;
-unsigned int ssaoFBO;
-unsigned int ssaoBlurFBO;
-unsigned int ssaoColorBuffer;
-unsigned int ssaoColorBufferBlur;
+unsigned int gBufferTEST, gBufferTexTEST, gBufferRboTEST, rboPos, rboNorm, rboCol;
+unsigned int rboDepth;
+unsigned int gBuffer, gPosition, gNormal, gAlbedo;
+unsigned int ssaoFBO, ssaoColorBuffer;
+unsigned int ssaoBlurFBO, ssaoColorBufferBlur;
 
 //hemisphere sampling
-std::uniform_real_distribution<GLfloat> randomFloats(0.0f, 1.0f);
-std::default_random_engine generator;
+//std::uniform_real_distribution<GLfloat> randomFloats(0.0f, 1.0f);
+//std::default_random_engine generator;
 std::vector<glm::vec3> ssaoKernel;
 std::vector<glm::vec3> ssaoNoise;
 unsigned int noiseTexture;
 
 //light
-glm::vec3 lightPos = glm::vec3(2.0f, 4.0f, -2.0f);
-glm::vec3 lightColor = glm::vec3(0.2f, 0.2f, 0.7f);
+//glm::vec3 lightPos = glm::vec3(2.0f, 4.0f, -2.0f);
+//glm::vec3 lightColor = glm::vec3(0.2f, 0.2f, 0.7f);
 
 //screen quad
 unsigned int quadVAO = 0;
@@ -74,15 +75,14 @@ void setup() {
 	renderer::camera.sensitivity = 0.001f;
 
 	//PostProcessSetUp();
-	//SSAOSetUp();
-	TwoPassTestSetup();
+	//TwoPassTestSetup();
+	SSAOSetUp();
 }
 
 void render() {
 	//PostProcessRender();
-	//SSAORender();
-	TwoPassTestRender();
-
+	//TwoPassTestRender();
+	SSAORender();
 }
 
 auto main()-> int {
@@ -140,7 +140,7 @@ void PostProcessSetUp() {
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer (so we can see stuff on screen)
 
-	renderQuad();
+	//renderQuad();
 }
 
 void PostProcessRender() {
@@ -191,8 +191,6 @@ void PostProcessRender() {
 }
 
 void TwoPassTestSetup() {
-	//TODO : Not complete
-
 	// Shaders
 	lambert = std::make_shared<Shader>("Lambert");
 	lambert->add(GL_VERTEX_SHADER, Shader::File, "resources/shaders/lambert.vert");
@@ -312,10 +310,79 @@ void SSAOSetUp() {
 	sphere.load(Mesh::File, "resources/models/sphere.obj");
 	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 
+	quad.load(Mesh::Quad);
 
 	glEnable(GL_DEPTH_TEST);
 
-	// g-buffer framebuffer
+	/// GEOM fbos
+
+	//test geom buffer with one texture attachment
+	glGenFramebuffers(1, &gBufferTEST);
+	glBindFramebuffer(GL_FRAMEBUFFER, gBufferTEST);
+
+	glGenTextures(1, &gBufferTexTEST);
+	glBindTexture(GL_TEXTURE_2D, gBufferTexTEST);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, renderer::width, renderer::height, 0, GL_RGB, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gBufferTexTEST, 0);
+
+	glGenRenderbuffers(1, &gBufferRboTEST);
+	glBindRenderbuffer(GL_RENDERBUFFER, gBufferRboTEST);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gBufferRboTEST);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//*************************
+
+
+	//Alternative gBuffer setup:
+	glGenFramebuffers(1, &gBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+
+	//tex 1 - Pos:
+	glGenTextures(1, &gPosition);
+	glBindTexture(GL_TEXTURE_2D, gPosition);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, renderer::width, renderer::height, 0, GL_RGB, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
+	
+	//tex 2 - normals:
+	glGenTextures(1, &gNormal);
+	glBindTexture(GL_TEXTURE_2D, gNormal);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, renderer::width, renderer::height, 0, GL_RGB, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
+	
+	//tex 3 - albedo:
+	glGenTextures(1, &gAlbedo);
+	glBindTexture(GL_TEXTURE_2D, gAlbedo);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedo, 0);
+	
+	// specify color attachments used 
+	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 }; //0 = position, 1 = normal, 2 = color/spec
+	glDrawBuffers(3, attachments);
+
+	// create and attach depth buffer (renderbuffer)
+	glGenRenderbuffers(1, &rboDepth);
+	glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	//****************************
+
+	/*
 	glGenFramebuffers(1, &gBuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
 
@@ -327,8 +394,9 @@ void SSAOSetUp() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glBindTexture(GL_TEXTURE_2D, 0); ///**
+	glBindTexture(GL_TEXTURE_2D, 0); 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
+
 
 	// normal color buffer
 	glGenTextures(1, &gNormal);
@@ -336,7 +404,7 @@ void SSAOSetUp() {
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, renderer::width, renderer::height, 0, GL_RGB, GL_FLOAT, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glBindTexture(GL_TEXTURE_2D, 0); ///**
+	glBindTexture(GL_TEXTURE_2D, 0); 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
 
 	// color + specular color buffer
@@ -345,8 +413,10 @@ void SSAOSetUp() {
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glBindTexture(GL_TEXTURE_2D, 0); ///**
+	glBindTexture(GL_TEXTURE_2D, 0); 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedo, 0);
+
+	
 
 	// specify color attachments used 
 	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 }; //0 = position, 1 = normal, 2 = color/spec
@@ -359,9 +429,9 @@ void SSAOSetUp() {
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, renderer::width, renderer::height);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) std::cout << "Framebuffer not complete!" << std::endl;
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);*/
 
-	// create framebuffer to hold SSAO processing stage 
+	///SSAO fbos
 	glGenFramebuffers(1, &ssaoFBO);
 	glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
 
@@ -388,10 +458,11 @@ void SSAOSetUp() {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	// generate sample kernel
+	std::uniform_real_distribution<GLfloat> randomFloats(0.0, 1.0); // generates random floats between 0.0 and 1.0
+	std::default_random_engine generator;
 	for (unsigned int i = 0; i < 64; ++i)
 	{
 		glm::vec3 sample(randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator));
-		//glm::vec3 sample(randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator), randomFloats(generator) * 2.0f - 1.0f);
 		sample = glm::normalize(sample);
 		sample *= randomFloats(generator);
 		float scale = float(i) / 64.0f;
@@ -408,6 +479,7 @@ void SSAOSetUp() {
 		glm::vec3 noise(randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator) * 2.0f - 1.0f, 0.0f); // rotate around z-axis (in tangent space)
 		ssaoNoise.push_back(noise);
 	}
+
 	glGenTextures(1, &noiseTexture);
 	glBindTexture(GL_TEXTURE_2D, noiseTexture);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, 4, 4, 0, GL_RGB, GL_FLOAT, &ssaoNoise[0]);
@@ -418,10 +490,10 @@ void SSAOSetUp() {
 	glBindTexture(GL_TEXTURE_2D, 0); ///**
 
 	// lighting info
-	lightPos = glm::vec3(2.0f, 4.0f, -2.0f);
-	lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+	//lightPos = glm::vec3(2.0f, 4.0f, -2.0f);
+	//lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
 
-	// shader config
+	/*// shader config
 	SSAO_lighting->use();
 	SSAO_lighting->bind("gPosition", 0);
 	SSAO_lighting->bind("gNormal", 1);
@@ -434,14 +506,160 @@ void SSAOSetUp() {
 	SSAO->bind("texNoise", 2);
 
 	SSAO_blur->use();
-	SSAO_blur->bind("ssaoInput", 0);
+	SSAO_blur->bind("ssaoInput", 0);*/
 
-	renderQuad();
+	//renderQuad();
+
+	/*/ 
+	//New code:
+	
+	fboSSAO = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+	fboSSAOblur = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+	fboSSAOlight = std::make_shared<Framebuffer>(renderer::width, renderer::height);
+
+	//*/
 }
 
 void SSAORender() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+	///Process:
+	/*
+	* glBindFramebuffer(cur frame buffer obj OR screen on last pass)
+	* Set clear colour (at start - on first pass)
+	* glClear everything
+	*
+	* Use shader
+	*
+	* bind the shader texture object to whatever index it is written to in set up //pass 2+
+	*
+	* glActiveTexture(whatever the index is for that tex) //pass 2+ (tex from PREV fbo)
+	* glBindTex(that tex) //pass 2+ (tex from PREV fbo)
+	* 
+	* Bind relevant shader uniforms etc
+	* Bind and draw meshes
+	* renderer::display() //this is rendering to the texture bound to the cur fbo object (either screen of a specified tex from another fbo)
+	* OR
+	* renderer::draw(quad); //draw the quad containing the tex
+	*/
+
+	///Some set up because proj and view are used for calcs too
+	glm::mat4 projection = renderer::camera.projection();
+	glm::mat4 view = renderer::camera.view();
+
+	///first pass - Geometry
+	//glBindFramebuffer(GL_FRAMEBUFFER, gBufferTEST);
+	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
+	
+
+	SSAO_geom->use();
+	SSAO_geom->bind("projection", projection);
+	SSAO_geom->bind("view", view);
+
+	// Bind matrices and draw mesh
+	SSAO_geom->bind("translate", sphere.translate_matrix());
+	SSAO_geom->bind("rotate", sphere.rotate_matrix());
+	SSAO_geom->bind("scale", sphere.scale_matrix());
+
+	SSAO_geom->bind("model", sphere.model_matrix());
+	renderer::draw(sphere);
+
+	SSAO_geom->bind("translate", cube.translate_matrix());
+	SSAO_geom->bind("rotate", cube.rotate_matrix());
+	SSAO_geom->bind("scale", cube.scale_matrix());
+
+	SSAO_geom->bind("model", cube.model_matrix());
+	renderer::draw(cube);
+
+	SSAO_geom->bind("translate", ground.translate_matrix());
+	SSAO_geom->bind("rotate", ground.rotate_matrix());
+	SSAO_geom->bind("scale", ground.scale_matrix());
+
+	SSAO_geom->bind("model", ground.model_matrix());
+	renderer::draw(ground);
+
+	renderer::display();
+
+	///second pass - SSAO
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
+	//glClear(GL_COLOR_BUFFER_BIT);
+	//renderer::clear();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	SSAO->use();
+
+	SSAO->bind("gPosition", 0);
+	SSAO->bind("gNormal", 1);
+	SSAO->bind("texNoise", 2);
+
+	// Send kernel + rotation 
+	for (unsigned int i = 0; i < 64; ++i) {
+		SSAO->bind("samples[" + std::to_string(i) + "]", ssaoKernel[i]);
+	}
+
+	SSAO->bind("projection", projection);
+
+	glDisable(GL_DEPTH_TEST);
+
+	//glActiveTexture(GL_TEXTURE0); //debugging
+	//glBindTexture(GL_TEXTURE_2D, gBufferTexTEST); //debugging
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gPosition);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, gNormal);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, noiseTexture);
+
+	renderer::draw(quad);
+
+	
+	///third pass - SSAO blur
+	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurFBO);
+	glClear(GL_COLOR_BUFFER_BIT);
+	//renderer::clear();
+
+	SSAO_blur->use();
+	SSAO_blur->bind("ssaoInput", 0);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
+
+	renderer::draw(quad);
+
+	/// fourth pass - Lighting
+	renderer::target();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//renderer::clear();
+
+	SSAO_lighting->use();
+
+	SSAO_lighting->bind("gPosition", 0);
+	SSAO_lighting->bind("gNormal", 1);
+	SSAO_lighting->bind("gAlbedo", 2);
+	SSAO_lighting->bind("ssao", 3);
+
+	// send light relevant uniforms
+	SSAO_lighting->bind("LightPos", glm::vec3(view * glm::vec4(2.0f, 4.0f, -2.0f, 1.0f)));
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gPosition);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, gNormal);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, gAlbedo);
+	glActiveTexture(GL_TEXTURE3); // add extra SSAO texture to lighting pass
+	glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
+
+	renderer::draw(quad);
+	
+
+
+/*
+	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glm::mat4 projection = renderer::camera.projection();
 	glm::mat4 view = renderer::camera.view();
@@ -454,7 +672,7 @@ void SSAORender() {
 	SSAO_geom->bind("projection", projection);
 	SSAO_geom->bind("view", view);
 
-	SSAO_geom->bind("invertedNormals", 0); //uniform exists for a room cube
+	//SSAO_geom->bind("invertedNormals", 0); //uniform exists for a room cube
 
 	// Bind matrices and draw mesh
 	sphere.shader = SSAO_geom;
@@ -470,7 +688,7 @@ void SSAORender() {
 	renderer::draw(ground);
 
 	renderer::display();
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
 	/// 2. generate SSAO texture
@@ -489,10 +707,13 @@ void SSAORender() {
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, noiseTexture);
 	//renderQuad();
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	renderer::draw(quad);
+
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
-
+	
 
 	/// 3. blur SSAO texture to remove noise
 	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurFBO);
@@ -502,26 +723,34 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
 	//renderQuad();
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	renderer::draw(quad);
 
+	
+	
 
 
 	/// 4. lighting pass
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	SSAO_lighting->use();
 
-	glBindVertexArray(quadVAO);
+	SSAO_lighting->bind("gPosition", 0);
+	SSAO_lighting->bind("gNormal", 1);
+	SSAO_lighting->bind("gAlbedo", 2);
+	SSAO_lighting->bind("ssao", 3);
+
+	//glBindVertexArray(quadVAO);
 
 	// send light relevant uniforms
-	glm::vec3 lightPosView = glm::vec3(view * glm::vec4(lightPos, 1.0f));
-	SSAO_lighting->bind("light.Position", lightPosView);
-	SSAO_lighting->bind("light.Color", lightColor);
+	glm::vec3 lightPosView = glm::vec3(view * glm::vec4(2.0f, 4.0f, -2.0f, 1.0f));
+	SSAO_lighting->bind("LightPos", lightPosView);
+	//SSAO_lighting->bind("light.Color", lightColor);
 	// Update attenuation parameters
 	//const float constant = 1.0; // note that we don't send this to the shader, we assume it is always 1.0 (in our case)
-	const float linear = 0.09f;
-	const float quadratic = 0.032f;
-	SSAO_lighting->bind("light.Linear", linear);
-	SSAO_lighting->bind("light.Quadratic", quadratic);
+	//const float linear = 0.09f;
+	//const float quadratic = 0.032f;
+	//SSAO_lighting->bind("light.Linear", linear);
+	//SSAO_lighting->bind("light.Quadratic", quadratic);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gPosition);
 	glActiveTexture(GL_TEXTURE1);
@@ -532,13 +761,16 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
 	//renderQuad();
 
+	renderer::draw(quad);
 
 	//glDisable(GL_DEPTH_TEST);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+	//glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	//renderer::display();
+	*/
 }
 
+/*
 void renderQuad()
 {
 	if (quadVAO == 0)
@@ -568,6 +800,7 @@ void renderQuad()
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
 }
+*/
 
 float lerp(float a, float b, float f)
 {
