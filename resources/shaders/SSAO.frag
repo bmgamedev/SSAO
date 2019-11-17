@@ -1,7 +1,6 @@
 #version 410
 
 out float FragColor;
-//out vec4 FragColor;
 
 in vec2 TexCoords;
 
@@ -20,15 +19,11 @@ const vec2 noiseScale = vec2(1280.0f/4.0f, 720.0f/4.0f);
 uniform mat4 projection;
 
 void main() {
-/*/
-    //debug
-    //FragColor = vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    FragColor = texture(gNormal, TexCoords);
-/*/
-	// get input for SSAO algorithm
+
     vec3 fragPos = texture(gPosition, TexCoords).xyz;
     vec3 normal = normalize(texture(gNormal, TexCoords).rgb);
     vec3 randomVec = normalize(texture(texNoise, TexCoords * noiseScale).xyz);
+
     // create TBN change-of-basis matrix: from tangent-space to view-space
     vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
     vec3 bitangent = cross(normal, tangent);
@@ -58,5 +53,4 @@ void main() {
     occlusion = 1.0f - (occlusion / kernelSize);
 
     FragColor = occlusion;
-//*/
 }

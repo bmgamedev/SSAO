@@ -39,33 +39,22 @@ unsigned int texColourBuffer;
 unsigned int renderbufferobject;
 
 //framebuffers - two pass
-//unsigned int framebuffer2;
-//unsigned int texColourBuffer2;
-//unsigned int renderbufferobject2;
 std::shared_ptr<Framebuffer> static fbo;
 std::shared_ptr<Framebuffer> static fbo2;
 
 //framebuffers - SSAO
-unsigned int gBufferTEST, gBufferTexTEST, gBufferRboTEST, rboPos, rboNorm, rboCol;
 unsigned int rboDepth;
 unsigned int gBuffer, gPosition, gNormal, gAlbedo;
 unsigned int ssaoFBO, ssaoColorBuffer;
 unsigned int ssaoBlurFBO, ssaoColorBufferBlur;
 
 //hemisphere sampling
-//std::uniform_real_distribution<GLfloat> randomFloats(0.0f, 1.0f);
-//std::default_random_engine generator;
+std::uniform_real_distribution<GLfloat> randomFloats(0.0f, 1.0f);
+std::default_random_engine generator;
 std::vector<glm::vec3> ssaoKernel;
 std::vector<glm::vec3> ssaoNoise;
 unsigned int noiseTexture;
 
-//light
-//glm::vec3 lightPos = glm::vec3(2.0f, 4.0f, -2.0f);
-//glm::vec3 lightColor = glm::vec3(0.2f, 0.2f, 0.7f);
-
-//screen quad
-unsigned int quadVAO = 0;
-unsigned int quadVBO;
 
 void setup() {
 	// App settings
@@ -113,6 +102,8 @@ void PostProcessSetUp() {
 	sphere.load(Mesh::File, "resources/models/sphere.obj");
 	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 
+	quad.load(Mesh::Quad);
+
 	//create frame buffer
 	glGenFramebuffers(1, &framebuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); //bind as active framebuffer
@@ -135,26 +126,18 @@ void PostProcessSetUp() {
 
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferobject);
 
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;//is it complete? (reserves memory)
-
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); //rebind default framebuffer (so we can see stuff on screen)
 
-	//renderQuad();
 }
 
 void PostProcessRender() {
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
 	glEnable(GL_DEPTH_TEST);
 
 	// Use the shader
 	lambert->use();
-	if (!lambert->is_active()) {
-		std::cerr << "ERROR: Couldn't use " << lambert->name << " shader." << std::endl;
-		return;
-	}
 
 	// Bind camera matrices
 	lambert->bind("projection", renderer::camera.projection());
@@ -179,15 +162,15 @@ void PostProcessRender() {
 	renderer::display();
 
 	// second pass
-	glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default i.e. screen
-	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	renderer::target();
+	renderer::clear(); //But in some instances, might not want to clear depth buffer??
 
 	post_process->use();
-	glBindVertexArray(quadVAO);
 	glDisable(GL_DEPTH_TEST);
 	glBindTexture(GL_TEXTURE_2D, texColourBuffer);
-	glDrawArrays(GL_TRIANGLES, 0, 6); //tested - needed
+
+	renderer::draw(quad);
+
 }
 
 void TwoPassTestSetup() {
@@ -315,29 +298,6 @@ void SSAOSetUp() {
 	glEnable(GL_DEPTH_TEST);
 
 	/// GEOM fbos
-
-	//test geom buffer with one texture attachment
-	glGenFramebuffers(1, &gBufferTEST);
-	glBindFramebuffer(GL_FRAMEBUFFER, gBufferTEST);
-
-	glGenTextures(1, &gBufferTexTEST);
-	glBindTexture(GL_TEXTURE_2D, gBufferTexTEST);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, renderer::width, renderer::height, 0, GL_RGB, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gBufferTexTEST, 0);
-
-	glGenRenderbuffers(1, &gBufferRboTEST);
-	glBindRenderbuffer(GL_RENDERBUFFER, gBufferRboTEST);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gBufferRboTEST);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	//*************************
-
-
-	//Alternative gBuffer setup:
 	glGenFramebuffers(1, &gBuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
 
@@ -380,56 +340,7 @@ void SSAOSetUp() {
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	//****************************
 
-	/*
-	glGenFramebuffers(1, &gBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-
-	// position color buffer
-	glGenTextures(1, &gPosition);
-	glBindTexture(GL_TEXTURE_2D, gPosition);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, renderer::width, renderer::height, 0, GL_RGB, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glBindTexture(GL_TEXTURE_2D, 0); 
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
-
-
-	// normal color buffer
-	glGenTextures(1, &gNormal);
-	glBindTexture(GL_TEXTURE_2D, gNormal);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, renderer::width, renderer::height, 0, GL_RGB, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glBindTexture(GL_TEXTURE_2D, 0); 
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
-
-	// color + specular color buffer
-	glGenTextures(1, &gAlbedo);
-	glBindTexture(GL_TEXTURE_2D, gAlbedo);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glBindTexture(GL_TEXTURE_2D, 0); 
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedo, 0);
-
-	
-
-	// specify color attachments used 
-	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 }; //0 = position, 1 = normal, 2 = color/spec
-	glDrawBuffers(3, attachments);
-
-	// create and attach depth buffer (renderbuffer)
-	unsigned int rboDepth;
-	glGenRenderbuffers(1, &rboDepth);
-	glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, renderer::width, renderer::height);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) std::cout << "Framebuffer not complete!" << std::endl;
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);*/
 
 	///SSAO fbos
 	glGenFramebuffers(1, &ssaoFBO);
@@ -458,8 +369,6 @@ void SSAOSetUp() {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	// generate sample kernel
-	std::uniform_real_distribution<GLfloat> randomFloats(0.0, 1.0); // generates random floats between 0.0 and 1.0
-	std::default_random_engine generator;
 	for (unsigned int i = 0; i < 64; ++i)
 	{
 		glm::vec3 sample(randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator));
@@ -487,37 +396,7 @@ void SSAOSetUp() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glBindTexture(GL_TEXTURE_2D, 0); ///**
-
-	// lighting info
-	//lightPos = glm::vec3(2.0f, 4.0f, -2.0f);
-	//lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
-
-	/*// shader config
-	SSAO_lighting->use();
-	SSAO_lighting->bind("gPosition", 0);
-	SSAO_lighting->bind("gNormal", 1);
-	SSAO_lighting->bind("gAlbedo", 2);
-	SSAO_lighting->bind("ssao", 3);
-
-	SSAO->use();
-	SSAO->bind("gPosition", 0);
-	SSAO->bind("gNormal", 1);
-	SSAO->bind("texNoise", 2);
-
-	SSAO_blur->use();
-	SSAO_blur->bind("ssaoInput", 0);*/
-
-	//renderQuad();
-
-	/*/ 
-	//New code:
-	
-	fboSSAO = std::make_shared<Framebuffer>(renderer::width, renderer::height);
-	fboSSAOblur = std::make_shared<Framebuffer>(renderer::width, renderer::height);
-	fboSSAOlight = std::make_shared<Framebuffer>(renderer::width, renderer::height);
-
-	//*/
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void SSAORender() {
@@ -547,7 +426,6 @@ void SSAORender() {
 	glm::mat4 view = renderer::camera.view();
 
 	///first pass - Geometry
-	//glBindFramebuffer(GL_FRAMEBUFFER, gBufferTEST);
 	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
 	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -559,23 +437,11 @@ void SSAORender() {
 	SSAO_geom->bind("view", view);
 
 	// Bind matrices and draw mesh
-	SSAO_geom->bind("translate", sphere.translate_matrix());
-	SSAO_geom->bind("rotate", sphere.rotate_matrix());
-	SSAO_geom->bind("scale", sphere.scale_matrix());
-
 	SSAO_geom->bind("model", sphere.model_matrix());
 	renderer::draw(sphere);
 
-	SSAO_geom->bind("translate", cube.translate_matrix());
-	SSAO_geom->bind("rotate", cube.rotate_matrix());
-	SSAO_geom->bind("scale", cube.scale_matrix());
-
 	SSAO_geom->bind("model", cube.model_matrix());
 	renderer::draw(cube);
-
-	SSAO_geom->bind("translate", ground.translate_matrix());
-	SSAO_geom->bind("rotate", ground.rotate_matrix());
-	SSAO_geom->bind("scale", ground.scale_matrix());
 
 	SSAO_geom->bind("model", ground.model_matrix());
 	renderer::draw(ground);
@@ -583,10 +449,7 @@ void SSAORender() {
 	renderer::display();
 
 	///second pass - SSAO
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
-	//glClear(GL_COLOR_BUFFER_BIT);
-	//renderer::clear();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	SSAO->use();
@@ -602,10 +465,8 @@ void SSAORender() {
 
 	SSAO->bind("projection", projection);
 
-	glDisable(GL_DEPTH_TEST);
+	//glDisable(GL_DEPTH_TEST);
 
-	//glActiveTexture(GL_TEXTURE0); //debugging
-	//glBindTexture(GL_TEXTURE_2D, gBufferTexTEST); //debugging
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gPosition);
 	glActiveTexture(GL_TEXTURE1);
@@ -619,7 +480,6 @@ void SSAORender() {
 	///third pass - SSAO blur
 	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurFBO);
 	glClear(GL_COLOR_BUFFER_BIT);
-	//renderer::clear();
 
 	SSAO_blur->use();
 	SSAO_blur->bind("ssaoInput", 0);
@@ -632,7 +492,6 @@ void SSAORender() {
 	/// fourth pass - Lighting
 	renderer::target();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	//renderer::clear();
 
 	SSAO_lighting->use();
 
@@ -641,7 +500,6 @@ void SSAORender() {
 	SSAO_lighting->bind("gAlbedo", 2);
 	SSAO_lighting->bind("ssao", 3);
 
-	// send light relevant uniforms
 	SSAO_lighting->bind("LightPos", glm::vec3(view * glm::vec4(2.0f, 4.0f, -2.0f, 1.0f)));
 
 	glActiveTexture(GL_TEXTURE0);
@@ -654,153 +512,7 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
 
 	renderer::draw(quad);
-	
-
-
-/*
-	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glm::mat4 projection = renderer::camera.projection();
-	glm::mat4 view = renderer::camera.view();
-
-	/// 1. geometry pass: render scene's geometry/color data into gbuffer
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	SSAO_geom->use();
-	SSAO_geom->bind("projection", projection);
-	SSAO_geom->bind("view", view);
-
-	//SSAO_geom->bind("invertedNormals", 0); //uniform exists for a room cube
-
-	// Bind matrices and draw mesh
-	sphere.shader = SSAO_geom;
-	SSAO_geom->bind("model", sphere.translate_matrix() * sphere.rotate_matrix() * sphere.scale_matrix());
-	renderer::draw(sphere);
-
-	cube.shader = SSAO_geom;
-	SSAO_geom->bind("model", cube.translate_matrix() * cube.rotate_matrix() * cube.scale_matrix());
-	renderer::draw(cube);
-
-	ground.shader = SSAO_geom;
-	SSAO_geom->bind("model", ground.translate_matrix() * ground.rotate_matrix() * ground.scale_matrix());
-	renderer::draw(ground);
-
-	renderer::display();
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-
-	/// 2. generate SSAO texture
-	glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
-	glClear(GL_COLOR_BUFFER_BIT);
-	SSAO->use();
-	// Send kernel + rotation 
-	for (unsigned int i = 0; i < 64; ++i) {
-		SSAO->bind("samples[" + std::to_string(i) + "]", ssaoKernel[i]);
-	}
-	SSAO->bind("projection", projection);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gPosition);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, gNormal);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, noiseTexture);
-	//renderQuad();
-
-	renderer::draw(quad);
-
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-
-	
-
-	/// 3. blur SSAO texture to remove noise
-	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurFBO);
-	glClear(GL_COLOR_BUFFER_BIT);
-	SSAO_blur->use();
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
-	//renderQuad();
-
-	renderer::draw(quad);
-
-	
-	
-
-
-	/// 4. lighting pass
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	SSAO_lighting->use();
-
-	SSAO_lighting->bind("gPosition", 0);
-	SSAO_lighting->bind("gNormal", 1);
-	SSAO_lighting->bind("gAlbedo", 2);
-	SSAO_lighting->bind("ssao", 3);
-
-	//glBindVertexArray(quadVAO);
-
-	// send light relevant uniforms
-	glm::vec3 lightPosView = glm::vec3(view * glm::vec4(2.0f, 4.0f, -2.0f, 1.0f));
-	SSAO_lighting->bind("LightPos", lightPosView);
-	//SSAO_lighting->bind("light.Color", lightColor);
-	// Update attenuation parameters
-	//const float constant = 1.0; // note that we don't send this to the shader, we assume it is always 1.0 (in our case)
-	//const float linear = 0.09f;
-	//const float quadratic = 0.032f;
-	//SSAO_lighting->bind("light.Linear", linear);
-	//SSAO_lighting->bind("light.Quadratic", quadratic);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gPosition);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, gNormal);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, gAlbedo);
-	glActiveTexture(GL_TEXTURE3); // add extra SSAO texture to lighting pass
-	glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
-	//renderQuad();
-
-	renderer::draw(quad);
-
-	//glDisable(GL_DEPTH_TEST);
-	//glDrawArrays(GL_TRIANGLES, 0, 6);
-
-	//renderer::display();
-	*/
 }
-
-/*
-void renderQuad()
-{
-	if (quadVAO == 0)
-	{
-		float quadVertices[] = {
-			// positions        // texture Coords
-			-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-			-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-			 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-			 -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-			 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-			 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-		};
-
-		// setup plane VAO
-		glGenVertexArrays(1, &quadVAO);
-		glGenBuffers(1, &quadVBO);
-		glBindVertexArray(quadVAO);
-		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-	}
-	glBindVertexArray(quadVAO);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-	glBindVertexArray(0);
-}
-*/
 
 float lerp(float a, float b, float f)
 {
