@@ -48,6 +48,7 @@ unsigned int ssaoBlurFBO, ssaoColorBufferBlur;
 std::uniform_real_distribution<GLfloat> randomFloats(0.0f, 1.0f);
 std::default_random_engine generator;
 std::vector<glm::vec3> ssaoKernel;
+std::vector<int> sampleUniforms;
 std::vector<glm::vec3> ssaoNoise;
 unsigned int noiseTexture;
 
@@ -353,6 +354,9 @@ void SSAOSetUp() {
 		scale = lerp(0.1f, 1.0f, scale * scale);
 		sample *= scale;
 		ssaoKernel.push_back(sample);
+
+		//create uniform name array
+		sampleUniforms.push_back(glGetUniformLocation(SSAO->ID(), ("samples[" + std::to_string(i) + "]").c_str()));
 	}
 
 	// generate noise texture
@@ -370,6 +374,12 @@ void SSAOSetUp() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glBindTexture(GL_TEXTURE_2D, 0);
+
+	// Send kernel + rotation 
+	for (unsigned int i = 0; i < 64; ++i) {
+		//SSAO->bind("samples[" + std::to_string(i) + "]", ssaoKernel[i]);
+		glUniform3fv(sampleUniforms[i], 1, glm::value_ptr(ssaoKernel[i]));
+	}
 }
 
 void SSAORender() {
@@ -431,10 +441,10 @@ void SSAORender() {
 	SSAO->bind("gNormal", 1);
 	SSAO->bind("texNoise", 2);
 
-	// Send kernel + rotation 
+	/*// Send kernel + rotation 
 	for (unsigned int i = 0; i < 64; ++i) {
 		SSAO->bind("samples[" + std::to_string(i) + "]", ssaoKernel[i]);
-	}
+	}*/
 
 	SSAO->bind("projection", projection);
 
@@ -473,7 +483,7 @@ void SSAORender() {
 	SSAO_lighting->bind("gAlbedo", 2);
 	SSAO_lighting->bind("ssao", 3);
 
-	SSAO_lighting->bind("LightPos", glm::vec3(view * glm::vec4(2.0f, 4.0f, -2.0f, 1.0f)));
+	SSAO_lighting->bind("LightPos", glm::vec3(view * glm::vec4(2.0f, 4.0f, 10.0f, 1.0f)));
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gPosition);
