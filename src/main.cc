@@ -40,17 +40,21 @@ std::shared_ptr<Framebuffer> static fbo2;
 
 //framebuffers - SSAO
 unsigned int rboDepth;
-unsigned int gBuffer, gPosition, gNormal, gAlbedo;
+unsigned int gBuffer, gPosition, gNormal, gAlbedo, gDepth;
 unsigned int ssaoFBO, ssaoColorBuffer;
 unsigned int ssaoBlurFBO, ssaoColorBufferBlur;
 
 //hemisphere sampling
 std::uniform_real_distribution<GLfloat> randomFloats(0.0f, 1.0f);
+std::uniform_real_distribution<GLfloat> minus_one_one_dist(-1.0f, 1.0f);
+std::mt19937 gen;
 std::default_random_engine generator;
 std::vector<glm::vec3> ssaoKernel;
 std::vector<int> sampleUniforms;
-std::vector<glm::vec3> ssaoNoise;
-unsigned int noiseTexture;
+//std::vector<glm::vec3> ssaoNoise;
+//unsigned int noiseTexture;
+GLfloat ssaoNoise[48];
+GLuint noiseTexture;
 
 
 void setup() {
@@ -301,7 +305,7 @@ void SSAOSetUp() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
 	
-	//tex 3 - albedo:
+	/*//tex 3 - albedo:
 	glGenTextures(1, &gAlbedo);
 	glBindTexture(GL_TEXTURE_2D, gAlbedo);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderer::width, renderer::height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
@@ -310,13 +314,24 @@ void SSAOSetUp() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glBindTexture(GL_TEXTURE_2D, 0);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedo, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedo, 0);*/
+
+	//tex 3 - depth:
+	glGenTextures(1, &gDepth);
+	glBindTexture(GL_TEXTURE_2D, gDepth);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, renderer::width, renderer::height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gDepth, 0);
 	
 	// specify color attachments used 
-	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 }; //0 = position, 1 = normal, 2 = color/spec
+	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 }; //0 = position, 1 = normal, 2 = color/spec - or depth
 	glDrawBuffers(3, attachments);
 
-	// create and attach depth buffer (renderbuffer)
+	/*// create and attach depth buffer (renderbuffer)
 	glGenRenderbuffers(1, &rboDepth);
 	glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
 	//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, renderer::width, renderer::height);
@@ -324,7 +339,7 @@ void SSAOSetUp() {
 	glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);*/
 
 
 
@@ -373,12 +388,18 @@ void SSAOSetUp() {
 	for (unsigned int i = 0; i < 16; i++)
 	{
 		glm::vec3 noise(randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator) * 2.0f - 1.0f, 0.0f);
-		ssaoNoise.push_back(noise);
+		//ssaoNoise.push_back(noise);
+		
+		ssaoNoise[3 * i] = noise.x;
+		ssaoNoise[3 * i + 1] = noise.y;
+		ssaoNoise[3 * i + 2] = noise.z;
+		
 	}
 
 	glGenTextures(1, &noiseTexture);
 	glBindTexture(GL_TEXTURE_2D, noiseTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, 4, 4, 0, GL_RGB, GL_FLOAT, &ssaoNoise[0]);
+	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, 4, 4, 0, GL_RGB, GL_FLOAT, &ssaoNoise[0]);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, 4, 4, 0, GL_RGB, GL_FLOAT, ssaoNoise);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -451,6 +472,8 @@ void SSAORender() {
 	SSAO->bind("gNormal", 1);
 	SSAO->bind("texNoise", 2);
 
+	SSAO->bind("gDepth", 3);
+
 	// Send kernel + rotation 
 	/*for (unsigned int i = 0; i < 64; ++i) {
 		SSAO->bind("samples[" + std::to_string(i) + "]", ssaoKernel[i]);
@@ -467,6 +490,9 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, gNormal);
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, noiseTexture);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, gDepth);
 
 	renderer::draw(quad);
 
@@ -492,17 +518,19 @@ void SSAORender() {
 
 	SSAO_lighting->bind("gPosition", 0);
 	SSAO_lighting->bind("gNormal", 1);
-	SSAO_lighting->bind("gAlbedo", 2);
+	//SSAO_lighting->bind("gAlbedo", 2);
+	SSAO_lighting->bind("gDepth", 2);
 	SSAO_lighting->bind("ssao", 3);
 
-	SSAO_lighting->bind("LightPos", glm::vec3(view * glm::vec4(2.0f, 4.0f, 10.0f, 1.0f)));
+	SSAO_lighting->bind("LightPos", glm::vec3(view * glm::vec4(.0f, 10.0f, 10.0f, 1.0f)));
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gPosition);
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, gNormal);
 	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, gAlbedo);
+	//glBindTexture(GL_TEXTURE_2D, gAlbedo);
+	glBindTexture(GL_TEXTURE_2D, gDepth);
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
 
