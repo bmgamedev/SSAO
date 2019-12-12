@@ -1,13 +1,16 @@
 #version 410
 
-out float FragColor;
+out vec4 FragColor;
 
 in vec2 TexCoords;
+
+in vec4 positionViewport;
 
 uniform sampler2D gPosition;
 uniform sampler2D gNormal;
 uniform sampler2D texNoise;
 uniform vec3 samples[64];
+uniform sampler2D depth;
 
 int kernelSize = 64;
 float radius = 0.5f;
@@ -21,6 +24,7 @@ uniform mat4 projection;
 void main() {
 
     vec3 fragPos = texture(gPosition, TexCoords).xyz;
+    //vec3 fragPos = texture(gPosition, TexCoords).xyw;
     vec3 normal = normalize(texture(gNormal, TexCoords).rgb);
     vec3 randomVec = normalize(texture(texNoise, TexCoords * noiseScale).xyz);
 
@@ -45,12 +49,16 @@ void main() {
 
         // get sample depth
         float sampleDepth = texture(gPosition, offset.xy).z; // get depth value of kernel sample
+        //float sampleDepth = texture(gPosition, offset.xz).y; // get depth value of kernel sample
 
         // range check & accumulate
         float rangeCheck = smoothstep(0.0f, 1.0f, radius / abs(fragPos.z - sampleDepth));
         occlusion += (sampleDepth >= curSample.z + bias ? 1.0f : 0.0f) * rangeCheck;
+        //float rangeCheck = smoothstep(0.0f, 1.0f, radius / abs(fragPos.y - sampleDepth));
+        //occlusion += (sampleDepth >= curSample.y + bias ? 1.0f : 0.0f) * rangeCheck;
     }
     occlusion = 1.0f - (occlusion / kernelSize);
+    FragColor = vec4(vec3(pow(occlusion, 10.0)), 1.0);
 
-    FragColor = occlusion;
 }
+

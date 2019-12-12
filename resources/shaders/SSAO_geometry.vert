@@ -19,7 +19,6 @@ void main() {
     out_texCoords = in_texCoord;
 
     mat3 normalMatrix = transpose(inverse(mat3(view * model)));
-    //Normal = normalMatrix * (invertedNormals ? -in_normal : in_normal);
     out_normal = normalMatrix * in_normal;
     gl_Position = projection * viewPos;
 }

@@ -32,7 +32,6 @@ void main() {
     //FragColor = vec4(AmbientOcclusion, 1.0f);
 
 
-
     // Simplified lighting code - would rather handle lighting components in the shader
     Light light;
     light.Position = LightPos;

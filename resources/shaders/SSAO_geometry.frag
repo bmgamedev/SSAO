@@ -12,5 +12,5 @@ void main() {
 
     gPosition = vec4(in_pos, 1.0f); // store the fragment position vector
     gNormal = vec4(normalize(in_normal), 1.0f); // store the per-fragment normals
-    gAlbedo = vec4(0.95f); // store the diffuse per-fragment color
+    gAlbedo = vec4(1.0f); // store the diffuse per-fragment color
 }
