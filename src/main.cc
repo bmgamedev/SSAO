@@ -457,25 +457,28 @@ void SSAORender() {
 	* renderer::draw(quad); //draw the quad containing the tex
 	*/
 
-	///Some set up because proj and view are used for calcs too
-	
-
+	///var set up
 	glm::mat4 projection = renderer::camera.projection();
 	glm::mat4 view = renderer::camera.view();
 
-	glm::vec3 lightPos = glm::vec3(view * glm::vec4(5.0f, 5.0f, 10.0f, 1.0f));
-	glm::mat4 lightProjection;
+	/*glm::mat4 lightProjection;
 	glm::mat4 lightView;
 	glm::mat4 lightSpaceMatrix;
+	glm::vec3 lightPos;
+
 	float near_plane = 0.1f;
 	float far_plane = 100.0f;
+
+	lightPos = glm::vec3(view * glm::vec4(5.0f, 5.0f, 5.0f, 1.0f));
+	glm::vec3 camPos = glm::vec3(view * glm::vec4(renderer::camera.position, 1.0f));
 	lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
 	//lightProjection = glm::perspective(60.0f, (GLfloat)renderer::width/ (GLfloat)renderer::height, near_plane, far_plane);
-	//lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-	lightView = glm::lookAt(lightPos, ground.position, glm::vec3(0.0, 1.0, 0.0));
+	lightView = glm::lookAt(lightPos, ground.position, glm::vec3(0.0, 0.0, 1.0));
+	//lightView = glm::lookAt(camPos, ground.position, glm::vec3(0.0, 0.0, 1.0));
 	lightSpaceMatrix = lightProjection * lightView;
 
-	///pass -1: depth map
+
+	///pass 0: render the depth map
 	glEnable(GL_DEPTH_TEST);
 
 	// render scene from light's point of view
@@ -483,42 +486,25 @@ void SSAORender() {
 	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 	
-	glUseProgram(simpleDepthShader->ID());
-	glUniformMatrix4fv(glGetUniformLocation(simpleDepthShader->ID() , "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
-	glUniformMatrix4fv(glGetUniformLocation(simpleDepthShader->ID(), "model"), 1, GLFW_FALSE, glm::value_ptr(sphere.model_matrix()));
+	//glUseProgram(simpleDepthShader->ID());
+	simpleDepthShader->use();
+
+	simpleDepthShader->bind("lightSpaceMatrix", lightSpaceMatrix);
+	simpleDepthShader->bind("model", sphere.model_matrix());
 	renderer::draw(sphere);
-	glUniformMatrix4fv(glGetUniformLocation(simpleDepthShader->ID(), "model"), 1, GLFW_FALSE, glm::value_ptr(sphere2.model_matrix()));
+	simpleDepthShader->bind("model", sphere2.model_matrix());
 	renderer::draw(sphere2);
-	glUniformMatrix4fv(glGetUniformLocation(simpleDepthShader->ID(), "model"), 1, GLFW_FALSE, glm::value_ptr(cube.model_matrix()));
+	simpleDepthShader->bind("model", cube.model_matrix());
 	renderer::draw(cube);
-	glUniformMatrix4fv(glGetUniformLocation(simpleDepthShader->ID(), "model"), 1, GLFW_FALSE, glm::value_ptr(ground.model_matrix()));
+	simpleDepthShader->bind("model", ground.model_matrix());
 	renderer::draw(ground);
 
 	renderer::display();
 
 	// reset viewport
-	glViewport(0, 0, renderer::width, renderer::height);
+	glViewport(0, 0, renderer::width, renderer::height);*/
 
-	///pass 0: render the depth map
-	/*glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	// reset viewport
-	glViewport(0, 0, renderer::width, renderer::height);
-	
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glCullFace(GL_BACK); 
-
-	glUseProgram(debugDepthQuad->ID());
-	glUniform1f(glGetUniformLocation(debugDepthQuad->ID(), "near_plane"), near_plane);
-	glUniform1f(glGetUniformLocation(debugDepthQuad->ID(), "far_plane"), far_plane);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, depthMap);
-
-	renderer::draw(quad);*/
-
-
-	
 	
 	///first pass - Geometry
 	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
@@ -526,47 +512,51 @@ void SSAORender() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	//glEnable(GL_DEPTH_TEST);
 
-
 	SSAO_geom->use();
+
 	SSAO_geom->bind("projection", projection);
 	SSAO_geom->bind("view", view);
 
 	// Bind matrices and draw mesh
 	SSAO_geom->bind("model", sphere.model_matrix());
 	renderer::draw(sphere);
-
 	SSAO_geom->bind("model", sphere2.model_matrix());
 	renderer::draw(sphere2);
-
 	SSAO_geom->bind("model", cube.model_matrix());
 	renderer::draw(cube);
-
 	SSAO_geom->bind("model", ground.model_matrix());
 	renderer::draw(ground);
 
-	//renderer::display();
-	renderer::draw(quad);
+	renderer::display();
+	//renderer::draw(quad);
 
 	///second pass - SSAO
 	renderer::target();
 	//glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
+	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	SSAO->use();
 
+	/*glm::mat4 sphereLightSpaceMat = lightProjection * lightView * (sphere.translate_matrix() * sphere.rotate_matrix() * sphere.scale_matrix());
+	glm::mat4 sphere2LightSpaceMat = lightProjection * lightView * (sphere2.translate_matrix() * sphere2.rotate_matrix() * sphere2.scale_matrix());
+	glm::mat4 cubeLightSpaceMat = lightProjection * lightView * (cube.translate_matrix() * cube.rotate_matrix() * cube.scale_matrix());
+	glm::mat4 groundLightSpaceMat = lightProjection * lightView * (ground.translate_matrix() * ground.rotate_matrix() * ground.scale_matrix());
+
+	simpleDepthShader->bind("lightMVP", sphereLightSpaceMat);
+	renderer::draw(sphere);
+	simpleDepthShader->bind("lightMVP", sphere2LightSpaceMat);
+	renderer::draw(sphere2);
+	simpleDepthShader->bind("lightMVP", cubeLightSpaceMat);
+	renderer::draw(cube);
+	simpleDepthShader->bind("lightMVP", groundLightSpaceMat);
+	renderer::draw(ground);*/
+
+
 	SSAO->bind("gPosition", 0);
 	SSAO->bind("gNormal", 1);
 	SSAO->bind("texNoise", 2);
-
-	SSAO->bind("depth", 3);
-
-	// Send kernel + rotation
-	//for (unsigned int i = 0; i < 64; ++i) {
-	//	SSAO->bind("samples[" + std::to_string(i) + "]", ssaoKernel[i]);
-	//}
-	//SSAO->bind("projection", projection);
-
-	//glDisable(GL_DEPTH_TEST);
+	//SSAO->bind("depth", 3);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gPosition);
@@ -574,9 +564,8 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, gNormal);
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, noiseTexture);
-
-	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_2D, depthMap);
+	//glActiveTexture(GL_TEXTURE3);
+	//glBindTexture(GL_TEXTURE_2D, depthMap);
 
 	renderer::draw(quad);
 
@@ -584,18 +573,21 @@ void SSAORender() {
 	///third pass - SSAO blur
 	//renderer::target();
 	/*glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurFBO);
-	glClear(GL_COLOR_BUFFER_BIT);
+	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	SSAO_blur->use();
+
 	SSAO_blur->bind("ssaoInput", 0);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
 
-	renderer::draw(quad);*/
+	renderer::draw(quad);
 
 	/// fourth pass - Lighting
-	/*renderer::target();
+	renderer::target();
+	renderer::clear_colour(glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	SSAO_lighting->use();
@@ -604,10 +596,8 @@ void SSAORender() {
 	SSAO_lighting->bind("gNormal", 1);
 	SSAO_lighting->bind("gAlbedo", 2);
 	SSAO_lighting->bind("ssao", 3);
-
 	//SSAO_lighting->bind("LightPos", glm::vec3(view * glm::vec4(2.0f, 4.0f, 10.0f, 1.0f)));
 	SSAO_lighting->bind("LightPos", glm::vec3(view * glm::vec4(lightPos, 1.0f)));
-
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gPosition);
@@ -615,7 +605,7 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, gNormal);
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, gAlbedo);
-	glActiveTexture(GL_TEXTURE3); // add extra SSAO texture to lighting pass
+	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
 
 	renderer::draw(quad);*/
