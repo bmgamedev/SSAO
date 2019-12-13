@@ -32,6 +32,11 @@ auto static quad = Mesh();
 auto static ground = Mesh();
 auto static cube = Mesh();
 auto static sphere = Mesh();
+auto static sphere2 = Mesh();
+auto static sphere3 = Mesh();
+auto static sphere4 = Mesh();
+auto static sphere5 = Mesh();
+auto static dragon = Mesh();
 
 //framebuffers - Post process
 std::shared_ptr<Framebuffer> static fboPostProcess;
@@ -91,7 +96,7 @@ void setup() {
 	renderer::camera.look_at(glm::vec3(0.0f));
 	renderer::camera.sensitivity = 0.001f;
 
-	ssaoOn = 0;
+	ssaoOn = 1;
 
 	//PostProcessSetUp();
 	//TwoPassTestSetup();
@@ -334,6 +339,22 @@ void SSAOSetUp() {
 	sphere.load(Mesh::File, "resources/models/sphere.obj");
 	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 
+	sphere2.load(Mesh::File, "resources/models/sphere.obj");
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
+
+	sphere3.load(Mesh::File, "resources/models/sphere.obj");
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
+
+	sphere4.load(Mesh::File, "resources/models/sphere.obj");
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
+
+	sphere5.load(Mesh::File, "resources/models/sphere.obj");
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);	
+
+	//dragon.load(Mesh::File, "resources/models/monkey.obj");
+	//dragon.position += glm::vec3(-1.0F, 0.0F, 1.0F);
+	
+
 	quad.load(Mesh::Quad);
 
 	glEnable(GL_DEPTH_TEST);
@@ -492,11 +513,26 @@ void SSAORender() {
 	SSAO_geom->bind("model", sphere.model_matrix());
 	renderer::draw(sphere);
 
+	SSAO_geom->bind("model", sphere2.model_matrix());
+	renderer::draw(sphere2);
+
+	SSAO_geom->bind("model", sphere3.model_matrix());
+	renderer::draw(sphere3);
+
+	SSAO_geom->bind("model", sphere4.model_matrix());
+	renderer::draw(sphere4);
+
+	SSAO_geom->bind("model", sphere5.model_matrix());
+	renderer::draw(sphere5);
+
 	SSAO_geom->bind("model", cube.model_matrix());
 	renderer::draw(cube);
 
 	SSAO_geom->bind("model", ground.model_matrix());
 	renderer::draw(ground);
+
+	//SSAO_geom->bind("model", dragon.model_matrix());
+	//renderer::draw(dragon);
 
 	renderer::display();
 
