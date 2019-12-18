@@ -32,11 +32,13 @@ auto static quad = Mesh();
 auto static ground = Mesh();
 auto static cube = Mesh();
 auto static sphere = Mesh();
-auto static sphere2 = Mesh();
+/*auto static sphere2 = Mesh();
 auto static sphere3 = Mesh();
 auto static sphere4 = Mesh();
 auto static sphere5 = Mesh();
-auto static dragon = Mesh();
+auto static dragon = Mesh();*/
+std::vector<Mesh> spheres;
+std::array<Mesh, 100> spheres1;
 
 //framebuffers - Post process
 std::shared_ptr<Framebuffer> static fboPostProcess;
@@ -59,7 +61,9 @@ std::vector<int> sampleUniforms;
 std::vector<glm::vec3> ssaoNoise;
 unsigned int noiseTexture;
 
-int ssaoOn;
+const int SQRT_MAX_SPHERES = 39;
+
+bool ssaoOn;
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
 
@@ -96,7 +100,7 @@ void setup() {
 	renderer::camera.look_at(glm::vec3(0.0f));
 	renderer::camera.sensitivity = 0.001f;
 
-	ssaoOn = 1;
+	ssaoOn = true;
 
 	//PostProcessSetUp();
 	//TwoPassTestSetup();
@@ -105,6 +109,16 @@ void setup() {
 
 void update(float delta_time) {
 	glfwSetKeyCallback(renderer::get_window(), key_callback);
+
+	/*if (renderer::keyboard()[GLFW_KEY_O])
+	{
+		if (ssaoOn) {
+			ssaoOn = false;
+		}
+		else {
+			ssaoOn = true;
+		}
+	}*/
 
 	if (glfwGetKey(renderer::get_window(), GLFW_KEY_W))
 	{
@@ -330,13 +344,13 @@ void SSAOSetUp() {
 	SSAO_no_blur->build();
 
 	// Meshes
-	ground.load(Mesh::Quad);
+	/*ground.load(Mesh::Quad);
 	ground.scale = glm::vec3(5.0f);
 
 	cube.load(Mesh::Cube);
-	cube.position += glm::vec3(1.0F, 0.0F, 1.0F);
+	cube.position += glm::vec3(1.0F, 0.0F, 1.0F);*/
 
-	sphere.load(Mesh::File, "resources/models/sphere.obj");
+	/*sphere.load(Mesh::File, "resources/models/sphere.obj");
 	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 
 	sphere2.load(Mesh::File, "resources/models/sphere.obj");
@@ -349,10 +363,26 @@ void SSAOSetUp() {
 	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);
 
 	sphere5.load(Mesh::File, "resources/models/sphere.obj");
-	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);	
+	sphere.position += glm::vec3(-1.0F, 0.0F, 1.0F);	*/
 
 	//dragon.load(Mesh::File, "resources/models/monkey.obj");
 	//dragon.position += glm::vec3(-1.0F, 0.0F, 1.0F);
+
+	//spheres = std::vector<Mesh>();
+	for (int i = 0; i < SQRT_MAX_SPHERES; i++) {
+		for (int j = 0; j < SQRT_MAX_SPHERES; j++) {
+			//Mesh sphere1 = Mesh();
+			//sphere1.load(Mesh::File, "resources/models/sphere.obj");
+			//sphere1.position += glm::vec3((GLfloat) i, (GLfloat) j, 1.0F);
+			//spheres.push_back(sphere1);
+			//spheres1[i + j] = std::move(sphere1);
+			auto& s = spheres.emplace_back(Mesh::File, "resources/models/sphere.obj");
+			s.position += glm::vec3(i+1, j+1, 1.0F);
+			s.scale = glm::vec3(0.5f);
+
+			//std::cout << "(" << i << ", " << j << ") #" << ((i*SQRT_MAX_SPHERES)+j) << std::endl;
+		}
+	}
 	
 
 	quad.load(Mesh::Quad);
@@ -444,7 +474,7 @@ void SSAOSetUp() {
 		ssaoKernel.push_back(sample);
 
 		//create uniform name array
-		sampleUniforms.push_back(glGetUniformLocation(SSAO->ID(), ("samples[" + std::to_string(i) + "]").c_str()));
+		sampleUniforms.push_back(glGetUniformLocation(SSAO->ID(), ("samples[" + std::to_string(i) + "]").c_str())); //TODO expriment with array because vector had issues with meshes...
 	}
 
 	// generate noise texture
@@ -510,7 +540,7 @@ void SSAORender() {
 	SSAO_geom->bind("view", view);
 
 	// Bind matrices and draw mesh
-	SSAO_geom->bind("model", sphere.model_matrix());
+	/*SSAO_geom->bind("model", sphere.model_matrix());
 	renderer::draw(sphere);
 
 	SSAO_geom->bind("model", sphere2.model_matrix());
@@ -523,13 +553,27 @@ void SSAORender() {
 	renderer::draw(sphere4);
 
 	SSAO_geom->bind("model", sphere5.model_matrix());
-	renderer::draw(sphere5);
+	renderer::draw(sphere5);*/
 
-	SSAO_geom->bind("model", cube.model_matrix());
+	//for (Mesh sphere : spheres1) {
+		//SSAO_geom->bind("model", sphere.model_matrix());
+		//renderer::draw(sphere);
+	//}
+
+	for (auto const& s : spheres)
+	{
+		SSAO_geom->bind("model", s.model_matrix());
+		renderer::draw(s);
+	}
+	//for (int i = 0; i < spheres1.size(); i++) {
+	//	renderer::draw(sphere);
+	//}
+
+	/*SSAO_geom->bind("model", cube.model_matrix());
 	renderer::draw(cube);
 
 	SSAO_geom->bind("model", ground.model_matrix());
-	renderer::draw(ground);
+	renderer::draw(ground);*/
 
 	//SSAO_geom->bind("model", dragon.model_matrix());
 	//renderer::draw(dragon);
@@ -541,7 +585,7 @@ void SSAORender() {
 	glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if (ssaoOn == 0) { //no ssao so...
+	if (ssaoOn == false) { //no ssao so...
 		SSAO_no->use();
 	}
 	else {
@@ -571,7 +615,7 @@ void SSAORender() {
 	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurFBO);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if (ssaoOn == 0) { //no ssao...
+	if (ssaoOn == false) { //no ssao...
 		SSAO_no_blur->use();
 	}
 	else {
@@ -607,7 +651,7 @@ void SSAORender() {
 	glBindTexture(GL_TEXTURE_2D, gNormal);
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, gAlbedo);
-	if (ssaoOn == 1) {
+	if (ssaoOn == true) {
 		glActiveTexture(GL_TEXTURE3);
 		glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
 	}
